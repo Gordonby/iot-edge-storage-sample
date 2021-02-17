@@ -1,0 +1,170 @@
+{
+  "$schema-template": "2.0.0",
+  "modulesContent": {
+    "$edgeAgent": {
+      "properties.desired": {
+        "schemaVersion": "1.0",
+        "runtime": {
+          "type": "docker",
+          "settings": {
+            "minDockerVersion": "v1.25",
+            "loggingOptions": ""
+          }
+        },
+        "systemModules": {
+          "edgeAgent": {
+            "type": "docker",
+            "settings": {
+              "image": "mcr.microsoft.com/azureiotedge-agent:1.0",
+              "createOptions": {}
+            }
+          },
+          "edgeHub": {
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "settings": {
+              "image": "mcr.microsoft.com/azureiotedge-hub:1.0",
+              "createOptions": {
+                "HostConfig": {
+                  "PortBindings": {
+                    "5001/tcp": [
+                      {
+                        "HostPort": "5001"
+                      }
+                    ],
+                    "5671/tcp": [
+                      {
+                        "HostPort": "5671"
+                      }
+                    ],
+                    "8883/tcp": [
+                      {
+                        "HostPort": "8883"
+                      }
+                    ],
+                    "443/tcp": [
+                      {
+                        "HostPort": "443"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "modules": {
+          "FileCopyModule": {
+            "version": "1.0",
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "settings": {
+              "image": "gordonbmsft/edgefilecopymodule:0.0.14-amd64",
+              "createOptions": {
+                "HostConfig": {
+                  "Mounts": [
+                    {
+                      "Target" : "/tmp/altdropdir",
+                      "Source" : "YourStackFileShareName",
+                      "Type" : "volume"
+                    }
+                  ]
+                }
+              }
+            },
+            "env": {
+              "altInputFolder": {
+                  "value": "/tmp/altdropdir/"
+              },
+              "AZBLOB_LOCAL_STORAGE_CONNSTR" : {
+                "value":"DefaultEndpointsProtocol=http;BlobEndpoint=http://azureblobstorageoniotedge:11002/iotedgedrama;AccountName=iotedgedrama;AccountKey=iYMKd+VQXJDxNwGInLuzl9tA5oUlxTcZnIVhfcGoUnRkXgGl7CROA7fYjOvXd+qFulujnhqjsdtYZpfNHqAVPg==;"
+              }, 
+              "AZBLOB_CONTAINER" : {
+                "value":"filestoazure"
+              }
+            }
+          },
+          "azureblobstorageoniotedge": {
+            "version": "1.0",
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "settings": {
+              "image": "mcr.microsoft.com/azure-blob-storage:latest",
+              "createOptions": {
+                "Env":[
+                  "LOCAL_STORAGE_ACCOUNT_NAME=iotedgedrama",
+                  "LOCAL_STORAGE_ACCOUNT_KEY=iYMKd+VQXJDxNwGInLuzl9tA5oUlxTcZnIVhfcGoUnRkXgGl7CROA7fYjOvXd+qFulujnhqjsdtYZpfNHqAVPg=="
+                 ],
+                 "HostConfig":{
+                   "Binds": ["/srv/containerdata:/blobroot"],
+                   "PortBindings":{
+                     "11002/tcp": [{"HostPort":"11002"}]
+                   }
+                 }
+              }
+            }
+          },
+          "FsToucher": {
+            "version": "1.0",
+            "type": "docker",
+            "status": "running",
+            "restartPolicy": "always",
+            "settings": {
+              "image": "gordonbmsft/fstoucher:0.0.13-amd64",
+              "createOptions": {
+                "HostConfig": {
+                  "Mounts": [
+                    {
+                      "Target" : "/tmp/filebeat",
+                      "Source" : "YourStackFileShareName",
+                      "Type" : "volume"
+                    }
+                  ]
+                }
+              }
+            },
+            "env": {
+              "storageFolder": {"value": "/tmp/filebeat/"}
+            }
+          }
+        }
+      }
+    },
+    "$edgeHub": {
+      "properties.desired": {
+        "schemaVersion": "1.0",
+        "routes": {
+          "FileCopyModuleToIoTHub": "FROM /messages/modules/FileCopyModule/outputs/* INTO $upstream",
+          "FileCopySignalSim": "FROM /messages/modules/FsToucher/outputs/* INTO BrokeredEndpoint(\"/modules/FileCopyModule/inputs/input1\")",
+          "azureblobstorageoniotedgeToIoTHub": "FROM /messages/modules/azureblobstorageoniotedge/outputs/* INTO $upstream"
+        },
+        "storeAndForwardConfiguration": {
+          "timeToLiveSecs": 7200
+        }
+      }
+    },
+    "azureblobstorageoniotedge" :  {
+      "properties.desired": {
+        "deviceAutoDeleteProperties": {
+          "deleteOn": false,
+          "deleteAfterMinutes": 0,
+          "retainWhileUploading": true
+        },
+        "deviceToCloudUploadProperties": {
+          "uploadOn": true,
+          "uploadOrder": "OldestFirst",
+          "cloudStorageConnectionString": "YOUR-AZURE-CLOUD-STORAGE-CONNECTION-STRING",
+          "storageContainersForUpload": {
+            "filestoazure": {
+              "target": "iotdestinationup"
+            }
+          },
+          "deleteAfterUpload": false
+        }
+      }
+    }
+  }
+}
