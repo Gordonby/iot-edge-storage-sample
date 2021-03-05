@@ -22,6 +22,11 @@
           "edgeHub": {
             "type": "docker",
             "status": "running",
+            "env": {
+              "upstreamProtocol": {
+              "value": "AmqpWs"
+              }
+            },
             "restartPolicy": "always",
             "settings": {
               "image": "mcr.microsoft.com/azureiotedge-hub:1.0",
